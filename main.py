@@ -212,6 +212,11 @@ def product_reviews(product_id):
 
     return render_template('review.html', product=product, reviews=reviews)
 
+@app.route('/contact')
+def contact():
+    return render_template('contact.html')
+
+
 @app.context_processor
 def inject_products():
     products = Product.query.all()

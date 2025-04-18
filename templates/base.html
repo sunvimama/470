@@ -31,6 +31,13 @@
                         </a>
                     </li>
 
+                    <!-- Contact Button -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('contact') }}">
+                            <i class="fas fa-phone me-1"></i> Contact
+                        </a>
+                    </li>
+
                     {% if current_user.is_authenticated %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
