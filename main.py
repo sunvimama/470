@@ -75,6 +75,109 @@ def logout():
     flash('You have been logged out.', 'info')
     return redirect(url_for('home'))
 
+
+##products code
+
+# ------------------ Product Model ------------------
+
+class Product(db.Model):
+    __tablename__ = 'product'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    price = db.Column(db.Float, nullable=False)
+    stock = db.Column(db.Integer, nullable=False)
+    image_url = db.Column(db.String(200), nullable=True)
+
+# ------------------ Admin Check Decorator ------------------
+
+from functools import wraps
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            flash("Admin access only.", "danger")
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# ------------------ Admin Product Management Routes ------------------
+
+@app.route('/admin/products')
+@login_required
+@admin_required
+def admin_products():
+    products = Product.query.all()
+    return render_template('admin/products.html', products=products)
+
+@app.route('/admin/products/add', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def add_product():
+    if request.method == 'POST':
+        try:
+            product = Product(
+                name=request.form['name'],
+                description=request.form['description'],
+                price=float(request.form['price']),
+                stock=int(request.form['stock']),
+                image_url=request.form['image_url']
+            )
+            db.session.add(product)
+            db.session.commit()
+            flash('Product added successfully!', 'success')
+            return redirect(url_for('admin_products'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error adding product: {str(e)}', 'danger')
+    return render_template('admin/add_product.html')
+
+@app.route('/admin/products/edit/<int:product_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_product(product_id):
+    product = Product.query.get_or_404(product_id)
+    if request.method == 'POST':
+        try:
+            product.name = request.form['name']
+            product.description = request.form['description']
+            product.price = float(request.form['price'])
+            product.stock = int(request.form['stock'])
+            product.image_url = request.form['image_url']
+            db.session.commit()
+            flash('Product updated successfully!', 'success')
+            return redirect(url_for('admin_products'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating product: {str(e)}', 'danger')
+    return render_template('admin/edit_product.html', product=product)
+
+@app.route('/admin/products/delete/<int:product_id>', methods=['POST'])
+@login_required
+@admin_required
+def delete_product(product_id):
+    product = Product.query.get_or_404(product_id)
+    try:
+        db.session.delete(product)
+        db.session.commit()
+        flash('Product deleted successfully!', 'info')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting product: {str(e)}', 'danger')
+    return redirect(url_for('admin_products'))
+
+##admin dashboard
+
+@app.route('/admin')
+@login_required
+@admin_required
+def admin_dashboard():
+    total_users = User.query.count()
+    total_products = Product.query.count()
+    return render_template('admin/dashboard.html', total_users=total_users, total_products=total_products)
+
+
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
