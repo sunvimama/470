@@ -1,0 +1,13 @@
+{
+    "MySQL Table": {
+        "prefix": "mysql-table",
+        "body": [
+            "CREATE TABLE `${1:table_name}` (",
+            "  `id` int(11) NOT NULL AUTO_INCREMENT,",
+            "  `${2:column_name}` ${3:varchar}(${4:255}) ${5:NOT NULL},",
+            "  PRIMARY KEY (`id`)",
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;"
+        ],
+        "description": "Create a new MySQL table"
+    }
+}

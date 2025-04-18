@@ -1,0 +1,23 @@
+{
+    "sql.format.dialect": "mysql",
+    "sql.validate.dialect": "mysql",
+    "sql.validate.enable": false,
+    "files.associations": {
+        "*.sql": "plaintext"
+    },
+    "sqltools.connections": [
+        {
+            "mysqlOptions": {
+                "authProtocol": "default"
+            },
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 3306,
+            "driver": "MySQL",
+            "name": "XAMPP MySQL",
+            "database": "etech",
+            "username": "root",
+            "password": ""
+        }
+    ]
+}
