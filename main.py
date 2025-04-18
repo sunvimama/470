@@ -25,6 +25,19 @@ class User(db.Model, UserMixin):
     phone = db.Column(db.Integer, unique=True, nullable=False)
     is_admin = db.Column(db.Boolean, nullable=False, default=False)
     password = db.Column(db.String(200), nullable=False)
+#Review 
+class Review(db.Model):
+    __tablename__ = 'review'
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    rating = db.Column(db.Integer, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    timestamp = db.Column(db.DateTime, default=db.func.now())
+
+    user = db.relationship('User', backref='reviews')
+    product = db.relationship('Product', backref='reviews')
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -177,6 +190,32 @@ def admin_dashboard():
     total_products = Product.query.count()
     return render_template('admin/dashboard.html', total_users=total_users, total_products=total_products)
 
+#Review 
+@app.route('/product/<int:product_id>/reviews', methods=['GET', 'POST'])
+@login_required
+def product_reviews(product_id):
+    product = Product.query.get_or_404(product_id)
+    reviews = Review.query.filter_by(product_id=product_id).order_by(Review.timestamp.desc()).all()
+
+    if request.method == 'POST':
+        content = request.form.get('content')
+        rating = int(request.form.get('rating'))
+
+        if not content or not rating:
+            flash("Review and rating are required.", "warning")
+        else:
+            new_review = Review(content=content, rating=rating, user_id=current_user.id, product_id=product_id)
+            db.session.add(new_review)
+            db.session.commit()
+            flash("Your review has been posted!", "success")
+            return redirect(url_for('product_reviews', product_id=product_id))
+
+    return render_template('review.html', product=product, reviews=reviews)
+
+@app.context_processor
+def inject_products():
+    products = Product.query.all()
+    return dict(products=products)
 
 if __name__ == "__main__":
     with app.app_context():
