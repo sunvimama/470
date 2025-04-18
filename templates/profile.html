@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - TechBazar{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <h2 class="card-title">Hello, {{ current_user.Name }}!</h2>
+        <p><strong>Email:</strong> {{ current_user.Email }}</p>
+        <p><strong>Phone:</strong> {{ current_user.phone }}</p>
+        <p><strong>NID:</strong> {{ current_user.Nid }}</p>
+        <p><strong>Account Type:</strong> {{ "Admin" if current_user.is_admin else "User" }}</p>
+    </div>
+</div>
+{% endblock %}

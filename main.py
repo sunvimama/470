@@ -216,6 +216,10 @@ def product_reviews(product_id):
 def contact():
     return render_template('contact.html')
 
+@app.route('/profile')
+@login_required
+def profile():
+    return render_template('profile.html')
 
 @app.context_processor
 def inject_products():
