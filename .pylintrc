@@ -1,0 +1,9 @@
+[MASTER]
+init-hook='import sys; sys.path.append("./venv/lib/python3.13/site-packages")'
+
+[MESSAGES CONTROL]
+disable=C0111,C0103,C0303,W0611,W0612,W0613,W0621,W0622,W0702,W0703,R0903,R0912,R0913,R0914,R0915
+
+[TYPECHECK]
+ignored-modules=flask,flask_sqlalchemy,flask_login,flask_bcrypt,dotenv
+ignored-classes=SQLAlchemy,scoped_session

@@ -3,18 +3,21 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, UserMixin, current_user
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
+from functools import wraps
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = "sunvi"
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:@localhost/etech'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:@localhost/etech?unix_socket=/Applications/XAMPP/xamppfiles/var/mysql/mysql.sock'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
+
+# ------------------ Models ------------------
 
 class User(db.Model, UserMixin):
     __tablename__ = 'user'
@@ -25,7 +28,16 @@ class User(db.Model, UserMixin):
     phone = db.Column(db.Integer, unique=True, nullable=False)
     is_admin = db.Column(db.Boolean, nullable=False, default=False)
     password = db.Column(db.String(200), nullable=False)
-#Review 
+
+class Product(db.Model):
+    __tablename__ = 'product'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    price = db.Column(db.Float, nullable=False)
+    stock = db.Column(db.Integer, nullable=False)
+    image_url = db.Column(db.String(200), nullable=True)
+
 class Review(db.Model):
     __tablename__ = 'review'
     id = db.Column(db.Integer, primary_key=True)
@@ -38,10 +50,35 @@ class Review(db.Model):
     user = db.relationship('User', backref='reviews')
     product = db.relationship('Product', backref='reviews')
 
+class Order(db.Model):
+    __tablename__ = 'orders'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    status = db.Column(db.String(50), nullable=False, default='Processing')
+    order_date = db.Column(db.DateTime, default=db.func.now())
+    delivery_date = db.Column(db.DateTime, nullable=True)
+
+    user = db.relationship('User', backref='orders')
+    product = db.relationship('Product')
+
+# ------------------ Auth & Admin Utils ------------------
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            flash("Admin access only.", "danger")
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# ------------------ Routes ------------------
 
 @app.route('/')
 def home():
@@ -53,7 +90,6 @@ def login():
         email = request.form.get('email')
         password = request.form.get('password')
         user = User.query.filter_by(Email=email).first()
-        
         if user and bcrypt.check_password_hash(user.password, password):
             login_user(user)
             flash('Logged in successfully!', 'success')
@@ -88,34 +124,24 @@ def logout():
     flash('You have been logged out.', 'info')
     return redirect(url_for('home'))
 
+@app.route('/contact')
+def contact():
+    return render_template('contact.html')
 
-##products code
+@app.route('/profile')
+@login_required
+def profile():
+    return render_template('profile.html')
 
-# ------------------ Product Model ------------------
+# ------------------ Admin Dashboard & Product Management ------------------
 
-class Product(db.Model):
-    __tablename__ = 'product'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text, nullable=True)
-    price = db.Column(db.Float, nullable=False)
-    stock = db.Column(db.Integer, nullable=False)
-    image_url = db.Column(db.String(200), nullable=True)
-
-# ------------------ Admin Check Decorator ------------------
-
-from functools import wraps
-
-def admin_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not current_user.is_authenticated or not current_user.is_admin:
-            flash("Admin access only.", "danger")
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-# ------------------ Admin Product Management Routes ------------------
+@app.route('/admin')
+@login_required
+@admin_required
+def admin_dashboard():
+    total_users = User.query.count()
+    total_products = Product.query.count()
+    return render_template('admin/dashboard.html', total_users=total_users, total_products=total_products)
 
 @app.route('/admin/products')
 @login_required
@@ -180,17 +206,8 @@ def delete_product(product_id):
         flash(f'Error deleting product: {str(e)}', 'danger')
     return redirect(url_for('admin_products'))
 
-##admin dashboard
+# ------------------ Review ------------------
 
-@app.route('/admin')
-@login_required
-@admin_required
-def admin_dashboard():
-    total_users = User.query.count()
-    total_products = Product.query.count()
-    return render_template('admin/dashboard.html', total_users=total_users, total_products=total_products)
-
-#Review 
 @app.route('/product/<int:product_id>/reviews', methods=['GET', 'POST'])
 @login_required
 def product_reviews(product_id):
@@ -212,19 +229,48 @@ def product_reviews(product_id):
 
     return render_template('review.html', product=product, reviews=reviews)
 
-@app.route('/contact')
-def contact():
-    return render_template('contact.html')
+# ------------------ Product Search & Filtering ------------------
 
-@app.route('/profile')
+@app.route('/search')
+def search_products():
+    brand = request.args.get('brand')
+    min_price = request.args.get('min_price', type=float)
+    max_price = request.args.get('max_price', type=float)
+    min_rating = request.args.get('min_rating', type=int)
+    availability = request.args.get('availability')
+
+    products = Product.query
+
+    if brand:
+        products = products.filter(Product.name.ilike(f"%{brand}%"))
+    if min_price is not None:
+        products = products.filter(Product.price >= min_price)
+    if max_price is not None:
+        products = products.filter(Product.price <= max_price)
+    if availability == 'in_stock':
+        products = products.filter(Product.stock > 0)
+    elif availability == 'out_of_stock':
+        products = products.filter(Product.stock <= 0)
+
+    filtered_products = products.all()
+    return render_template('search_results.html', products=filtered_products)
+
+# ------------------ Order Tracking & History ------------------
+
+@app.route('/orders')
 @login_required
-def profile():
-    return render_template('profile.html')
+def order_history():
+    orders = Order.query.filter_by(user_id=current_user.id).order_by(Order.order_date.desc()).all()
+    return render_template('order_history.html', orders=orders)
+
+# ------------------ Context Processor ------------------
 
 @app.context_processor
 def inject_products():
     products = Product.query.all()
     return dict(products=products)
+
+# ------------------ App Init ------------------
 
 if __name__ == "__main__":
     with app.app_context():
