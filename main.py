@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash,jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, UserMixin, current_user
 from flask_bcrypt import Bcrypt
@@ -61,6 +61,14 @@ class Order(db.Model):
     delivery_date = db.Column(db.DateTime, nullable=True)
 
     user = db.relationship('User', backref='orders')
+    product = db.relationship('Product')
+class Wishlist(db.Model):
+    __tablename__ = 'wishlist'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+
+    user = db.relationship('User', backref='wishlist_items')
     product = db.relationship('Product')
 
 # ------------------ Auth & Admin Utils ------------------
@@ -269,6 +277,47 @@ def order_history():
 def inject_products():
     products = Product.query.all()
     return dict(products=products)
+
+
+
+
+
+
+@app.route('/wishlist/add/<int:product_id>', methods=['POST'])
+@login_required
+def add_to_wishlist(product_id):
+    existing_item = Wishlist.query.filter_by(user_id=current_user.id, product_id=product_id).first()
+    if not existing_item:
+        new_item = Wishlist(user_id=current_user.id, product_id=product_id)
+        db.session.add(new_item)
+        db.session.commit()
+        flash('Added to wishlist!', 'success')
+    else:
+        flash('Item already in wishlist.', 'info')
+    return redirect(url_for('shop'))
+
+@app.route('/wishlist/remove/<int:product_id>', methods=['POST'])
+@login_required
+def remove_from_wishlist(product_id):
+    item = Wishlist.query.filter_by(user_id=current_user.id, product_id=product_id).first()
+    if item:
+        db.session.delete(item)
+        db.session.commit()
+        flash('Removed from wishlist.', 'info')
+    else:
+        flash('Item not found in wishlist.', 'warning')
+    return redirect(url_for('wishlist'))
+
+@app.route('/wishlist')
+@login_required
+def wishlist():
+    wishlist_items = Wishlist.query.filter_by(user_id=current_user.id).all()
+    return render_template('wishlist.html', wishlist_items=wishlist_items)
+
+@app.route('/shop')
+def shop():
+    products = Product.query.all()
+    return render_template('product_display.html', products=products)
 
 # ------------------ App Init ------------------
 
