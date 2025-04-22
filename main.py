@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash,jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash,jsonify,session
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, UserMixin, current_user
 from flask_bcrypt import Bcrypt
@@ -91,6 +91,11 @@ def admin_required(f):
 @app.route('/')
 def home():
     return render_template('home.html')
+
+@app.route('/product-display')
+def product_display():
+    return render_template('product_display.html')
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -320,6 +325,83 @@ def shop():
     return render_template('product_display.html', products=products)
 
 # ------------------ App Init ------------------
+@app.route('/add_to_cart/<int:product_id>', methods=['POST'])
+@login_required
+def add_to_cart(product_id):
+    product = Product.query.get_or_404(product_id)
+    cart = session.get('cart', {})
+    if str(product_id) in cart:
+        cart[str(product_id)]['quantity'] += 1
+    else:
+        cart[str(product_id)] = {
+            'id': product.id,
+            'name': product.name,
+            'price': product.price,
+            'quantity': 1
+        }
+    session['cart'] = cart
+    flash(f"Added {product.name} to cart.", "success")
+    return redirect(url_for('shop'))
+
+@app.route('/cart')
+@login_required
+def cart():
+    cart = session.get('cart', {})
+    total = sum(item['price'] * item['quantity'] for item in cart.values())
+    return render_template('cart.html', cart=cart, total=total)
+
+@app.route('/update_cart', methods=['POST'])
+@login_required
+def update_cart():
+    cart = session.get('cart', {})
+    for product_id, item in cart.items():
+        new_quantity = int(request.form.get(f"quantity_{product_id}", item['quantity']))
+        if new_quantity > 0:
+            cart[product_id]['quantity'] = new_quantity
+        else:
+            del cart[product_id]
+    session['cart'] = cart
+    flash("Cart updated.", "info")
+    return redirect(url_for('cart'))
+
+@app.route('/remove_from_cart/<int:product_id>')
+@login_required
+def remove_from_cart(product_id):
+    cart = session.get('cart', {})
+    cart.pop(str(product_id), None)
+    session['cart'] = cart
+    flash("Item removed from cart.", "warning")
+    return redirect(url_for('cart'))
+@app.route('/checkout', methods=['GET', 'POST'])
+@login_required
+def checkout():
+    cart = session.get('cart', {})
+    print("Cart from session:", session.get('cart'))
+
+    if not cart:
+        flash("Your cart is empty.", "info")
+        return redirect(url_for('shop'))
+
+    cart_items = []
+    total = 0
+    for item_id, item in cart.items():
+        item_total = item['price'] * item['quantity']
+        cart_items.append({
+            'id': item['id'],
+            'name': item['name'],
+            'price': item['price'],
+            'quantity': item['quantity'],
+            'total': item_total
+        })
+        total += item_total
+
+    if request.method == 'POST':
+        # Simulate order processing (You can extend this with actual order creation in the database)
+        flash("Order placed successfully!", "success")
+        session.pop('cart', None)  # Clear the cart
+        return redirect(url_for('order_history'))
+
+    return render_template('checkout.html', cart_items=cart_items, total=total)
 
 if __name__ == "__main__":
     with app.app_context():
