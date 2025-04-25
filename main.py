@@ -219,6 +219,20 @@ def delete_product(product_id):
         flash(f'Error deleting product: {str(e)}', 'danger')
     return redirect(url_for('admin_products'))
 
+@app.route('/admin/orders')
+@login_required
+@admin_required
+def admin_orders():
+    orders = Order.query.order_by(Order.order_date.desc()).all()
+
+    total_sales = db.session.query(db.func.sum(Product.price * Order.quantity)).join(Product, Order.product_id == Product.id).scalar() or 0
+    total_orders = len(orders)
+    completed_orders = Order.query.filter_by(status='Delivered').count()
+    pending_orders = Order.query.filter(Order.status != 'Delivered').count()
+
+    return render_template('admin/orders.html', orders=orders, total_sales=total_sales, total_orders=total_orders,
+                           completed_orders=completed_orders, pending_orders=pending_orders)
+
 # ------------------ Review ------------------
 
 @app.route('/product/<int:product_id>/reviews', methods=['GET', 'POST'])
