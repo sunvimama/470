@@ -1,37 +1,105 @@
 {% extends 'base.html' %}
-{% block title %}Your Wishlist{% endblock %}
+
+{% block title %}Your Wishlist - TechBazar{% endblock %}
 
 {% block content %}
-<h2 class="mb-4 text-center">My Wishlist</h2>
-<div class="row row-cols-1 row-cols-md-3 g-4">
-    {% for item in wishlist_items %}
-    <div class="col">
-        <div class="card h-100 shadow">
-            <img src="{{ item.product.image_url or url_for('static', filename='default-product.jpg') }}" class="card-img-top">
-            <div class="card-body d-flex flex-column">
-                <h5 class="card-title">{{ item.product.name }}</h5>
-                <p class="card-text text-muted">${{ "%.2f"|format(item.product.price) }}</p>
-                <p class="card-text small">
-                    {{ item.product.description[:100] }}
-                    {% if item.product.description|length > 100 %}...{% endif %}
-                </p>
-                <div class="mt-auto d-flex justify-content-between">
-                    <a href="{{ url_for('product_reviews', product_id=item.product.id) }}" class="btn btn-outline-primary btn-sm">
-                        <i class="fas fa-info-circle me-1"></i> Details
-                    </a>
-                    <form action="{{ url_for('remove_from_wishlist', product_id=item.product.id) }}" method="POST">
-                        <button class="btn btn-outline-danger btn-sm">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </form>
+<div class="container py-5">
+    <div class="text-center mb-5">
+        <h2 class="display-4 font-weight-bold text-dark">My Wishlist</h2>
+        <p class="text-muted">Your favorite products at a glance</p>
+    </div>
+
+    <div class="row row-cols-1 row-cols-md-3 g-4">
+        {% for item in wishlist_items %}
+        <div class="col">
+            <div class="card h-100 shadow-sm border-0 bg-light">
+                <img src="{{ item.product.image_url or url_for('static', filename='default-product.jpg') }}" class="card-img-top" alt="Product Image">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title text-dark">{{ item.product.name }}</h5>
+                    <p class="card-text text-muted">${{ "%.2f"|format(item.product.price) }}</p>
+                    <p class="card-text text-muted small">
+                        {{ item.product.description[:100] }}
+                        {% if item.product.description|length > 100 %}...{% endif %}
+                    </p>
+                    <div class="mt-auto d-flex justify-content-between">
+                        <a href="{{ url_for('product_reviews', product_id=item.product.id) }}" class="btn btn-outline-primary btn-sm rounded-pill">
+                            <i class="fas fa-info-circle me-1"></i> View Details
+                        </a>
+                        <form action="{{ url_for('remove_from_wishlist', product_id=item.product.id) }}" method="POST">
+                            <button class="btn btn-outline-danger btn-sm rounded-pill">
+                                <i class="fas fa-trash-alt"></i> Remove
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
+        {% else %}
+        <div class="col-12 text-center mt-5">
+            <div class="alert alert-light text-dark rounded-3">
+                Your wishlist is empty. Start adding some favorites!
+            </div>
+        </div>
+        {% endfor %}
     </div>
-    {% else %}
-    <div class="col-12 text-center">
-        <p class="text-muted">Your wishlist is empty. Start adding some favorites!</p>
-    </div>
-    {% endfor %}
 </div>
+
+<style>
+    body {
+        background-color: #f9f9f9;
+        color: #333;
+        font-family: 'Segoe UI', sans-serif;
+    }
+
+    .card {
+        border-radius: 8px;
+        overflow: hidden;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0px 10px 30px rgba(0, 0, 0, 0.1);
+    }
+
+    .card-img-top {
+        object-fit: cover;
+        height: 200px;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .card-title {
+        font-size: 1.2rem;
+        font-weight: 600;
+    }
+
+    .btn-outline-primary {
+        color: #007bff;
+        border-color: #007bff;
+    }
+
+    .btn-outline-primary:hover {
+        background-color: #007bff;
+        color: white;
+    }
+
+    .btn-outline-danger {
+        color: #dc3545;
+        border-color: #dc3545;
+    }
+
+    .btn-outline-danger:hover {
+        background-color: #dc3545;
+        color: white;
+    }
+
+    .alert {
+        background-color: #ffffff;
+        border: none;
+    }
+
+    .text-muted {
+        color: #6c757d;
+    }
+</style>
 {% endblock %}
