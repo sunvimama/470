@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container">
+    <h2>📊 Sales & Revenue Analytics</h2>
+    <p><strong>Total Orders:</strong> {{ total_orders }}</p>
+    <p><strong>Total Revenue:</strong> TK {{ total_revenue }}</p>
+
+    <h3>💼 Product Performance</h3>
+    <table>
+        <thead>
+            <tr><th>Product</th><th>Units Sold</th><th>Total Sales (TK)</th></tr>
+        </thead>
+        <tbody>
+            {% for name, units_sold, total_sales in product_sales %}
+            <tr>
+                <td>{{ name }}</td>
+                <td>{{ units_sold }}</td>
+                <td>{{ total_sales }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3>📈 Daily Revenue</h3>
+    <ul>
+        {% for day, revenue in daily_revenue %}
+        <li>{{ day }}: TK {{ revenue }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

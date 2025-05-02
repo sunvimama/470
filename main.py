@@ -658,7 +658,7 @@ def return_request(order_id):
         if not reason:
             flash("Please provide a reason for return.", "warning")
         else:
-            return_req = ReturnRequest(order_id=order.id, user_id=current_user.id, reason=reason)
+            return_req = return_request(order_id=order.id, user_id=current_user.id, reason=reason)
             db.session.add(return_req)
             db.session.commit()
             flash("Return request submitted.", "success")
@@ -671,7 +671,7 @@ def return_request(order_id):
 def admin_returns():
     if not current_user.is_admin:
         abort(403)
-    returns = ReturnRequest.query.order_by(ReturnRequest.request_date.desc()).all()
+    returns = return_request.query.order_by(return_request.request_date.desc()).all()
     return render_template('admin_returns.html', returns=returns)
 
 @app.route('/admin/returns/update/<int:return_id>/<string:action>')
@@ -680,14 +680,14 @@ def update_return_status(return_id, action):
     if not current_user.is_admin:
         abort(403)
 
-    return_req = ReturnRequest.query.get_or_404(return_id)
+    return_req = return_request.query.get_or_404(return_id)
     if action == 'approve':
         return_req.status = 'Approved'
     elif action == 'reject':
         return_req.status = 'Rejected'
     elif action == 'refund':
         return_req.status = 'Refunded'
-        refund = RefundStatus(return_id=return_req.id, refunded=True, refund_date=datetime.utcnow(), amount=return_req.order.total_price)
+        refund = RefundStatus(return_id=return_req.id, refunded=True, refund_date=datetime.utcnow(), amount=return_req.order.total_price) # type: ignore
         db.session.add(refund)
     db.session.commit()
     flash(f"Return request {action}d.", "info")
@@ -695,11 +695,31 @@ def update_return_status(return_id, action):
 @app.route('/returns')
 @login_required
 def view_returns():
-    returns = ReturnRequest.query.filter_by(user_id=current_user.id).order_by(ReturnRequest.created_at.desc()).all()
+    returns = return_request.query.filter_by(user_id=current_user.id).order_by(return_request.created_at.desc()).all()
     return render_template('return_request.html', returns=returns)
 @app.route('/refund-policy')
 def refund_policy():
     return render_template('refund_policy.html') 
+
+@app.route('/admin/analytics')
+@login_required
+def analytics_dashboard():
+    if not current_user.is_admin:
+        flash("Access denied.", "danger")
+        return redirect(url_for('home'))
+
+    total_sales = db.session.query(db.func.sum(OrderItem.price * OrderItem.quantity)).scalar() or 0
+    total_orders = Order.query.count()
+
+    product_performance = db.session.query(
+        Product.name,
+        db.func.sum(OrderItem.quantity).label('total_sold')
+    ).join(OrderItem).group_by(Product.id).order_by(db.func.sum(OrderItem.quantity).desc()).limit(10).all()
+
+    return render_template("admin/analytics.html", 
+                           total_sales=total_sales,
+                           total_orders=total_orders,
+                           product_performance=product_performance)
 
 
 if __name__ == "__main__":
