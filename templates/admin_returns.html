@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container">
+    <h2 class="mt-4">Manage Return Requests</h2>
+    <table class="table table-bordered mt-3">
+        <thead>
+            <tr>
+                <th>Order</th>
+                <th>User</th>
+                <th>Reason</th>
+                <th>Status</th>
+                <th>Requested At</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for r in returns %}
+            <tr>
+                <td>{{ r.order.order_number }}</td>
+                <td>{{ r.user.username }}</td>
+                <td>{{ r.reason }}</td>
+                <td>{{ r.status }}</td>
+                <td>{{ r.request_date.strftime('%Y-%m-%d') }}</td>
+                <td>
+                    {% if r.status == 'Pending' %}
+                        <a href="{{ url_for('update_return_status', return_id=r.id, action='approve') }}" class="btn btn-success btn-sm">Approve</a>
+                        <a href="{{ url_for('update_return_status', return_id=r.id, action='reject') }}" class="btn btn-danger btn-sm">Reject</a>
+                    {% elif r.status == 'Approved' %}
+                        <a href="{{ url_for('update_return_status', return_id=r.id, action='refund') }}" class="btn btn-primary btn-sm">Mark Refunded</a>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

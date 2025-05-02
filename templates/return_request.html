@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container">
+    <h2 class="mt-4">Return Request for Order #{{ order.order_number }}</h2>
+    <form method="POST" class="mt-3">
+        <div class="form-group">
+            <label for="reason">Reason for Return:</label>
+            <textarea name="reason" class="form-control" rows="4" required></textarea>
+        </div>
+        <button type="submit" class="btn btn-warning mt-3">Submit Return Request</button>
+    </form>
+</div>
+{% endblock %}

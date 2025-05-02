@@ -49,3 +49,20 @@ class Coupon(db.Model):
             return self.expiration_date > datetime.now()
         return True  # No expiration date means it's always valid
 
+class ReturnRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    reason = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(50), default='Pending')  # Pending, Approved, Rejected, Refunded
+    request_date = db.Column(db.DateTime, default=datetime.utcnow)
+    update_date = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class RefundStatus(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    return_id = db.Column(db.Integer, db.ForeignKey('return_request.id'), nullable=False)
+    refunded = db.Column(db.Boolean, default=False)
+    refund_date = db.Column(db.DateTime)
+    amount = db.Column(db.Float)
+
+

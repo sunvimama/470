@@ -11,6 +11,7 @@
             <th>Status</th>
             <th>Ordered On</th>
             <th>Delivery</th>
+            <th>Actions</th>
         </tr>
     </thead>
     <tbody>
@@ -21,6 +22,15 @@
             <td>{{ order.status }}</td>
             <td>{{ order.order_date.strftime('%Y-%m-%d') }}</td>
             <td>{{ order.delivery_date.strftime('%Y-%m-%d') if order.delivery_date else 'TBD' }}</td>
+            <td>
+                {% if order.is_returnable and not order.return_request %}
+                    <a href="{{ url_for('request_return', order_id=order.id) }}" class="btn btn-sm btn-warning">Request Return</a>
+                {% elif order.return_request %}
+                    <span class="badge bg-info text-dark">Return: {{ order.return_request.status }}</span>
+                {% else %}
+                    <span class="text-muted">N/A</span>
+                {% endif %}
+            </td>
         </tr>
         {% endfor %}
     </tbody>

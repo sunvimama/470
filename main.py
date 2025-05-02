@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, UserMixin, current_user
 from flask_bcrypt import Bcrypt
@@ -648,6 +648,58 @@ def order_confirmation():
     order_number = session.pop('order_number', None)
     return render_template('order_confirmation.html', order_number=order_number)
 
+@app.route('/return_request/<int:order_id>', methods=['GET', 'POST'])
+@login_required
+def return_request(order_id):
+    order = Order.query.get_or_404(order_id)
+
+    if request.method == 'POST':
+        reason = request.form.get('reason')
+        if not reason:
+            flash("Please provide a reason for return.", "warning")
+        else:
+            return_req = ReturnRequest(order_id=order.id, user_id=current_user.id, reason=reason)
+            db.session.add(return_req)
+            db.session.commit()
+            flash("Return request submitted.", "success")
+            return redirect(url_for('order_history'))
+
+    return render_template('return_request.html', order=order)
+
+@app.route('/admin/returns')
+@login_required
+def admin_returns():
+    if not current_user.is_admin:
+        abort(403)
+    returns = ReturnRequest.query.order_by(ReturnRequest.request_date.desc()).all()
+    return render_template('admin_returns.html', returns=returns)
+
+@app.route('/admin/returns/update/<int:return_id>/<string:action>')
+@login_required
+def update_return_status(return_id, action):
+    if not current_user.is_admin:
+        abort(403)
+
+    return_req = ReturnRequest.query.get_or_404(return_id)
+    if action == 'approve':
+        return_req.status = 'Approved'
+    elif action == 'reject':
+        return_req.status = 'Rejected'
+    elif action == 'refund':
+        return_req.status = 'Refunded'
+        refund = RefundStatus(return_id=return_req.id, refunded=True, refund_date=datetime.utcnow(), amount=return_req.order.total_price)
+        db.session.add(refund)
+    db.session.commit()
+    flash(f"Return request {action}d.", "info")
+    return redirect(url_for('admin_returns'))
+@app.route('/returns')
+@login_required
+def view_returns():
+    returns = ReturnRequest.query.filter_by(user_id=current_user.id).order_by(ReturnRequest.created_at.desc()).all()
+    return render_template('return_request.html', returns=returns)
+@app.route('/refund-policy')
+def refund_policy():
+    return render_template('refund_policy.html') 
 
 
 if __name__ == "__main__":
