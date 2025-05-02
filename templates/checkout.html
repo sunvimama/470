@@ -10,7 +10,7 @@
     </div>
 
     {% if cart_items %}
-    <form method="POST">
+    <form method="POST" action="{{ url_for('process_payment') }}">
         <div class="row g-4">
             <!-- Shipping Info -->
             <div class="col-lg-6">
@@ -52,16 +52,22 @@
                                     {% for item in cart_items %}
                                     <tr>
                                         <td>{{ item.name }}</td>
-                                        <td>${{ "%.2f"|format(item.price) }}</td>
+                                        <td>TK {{ "%.2f"|format(item.price) }}</td>
                                         <td>{{ item.quantity }}</td>
-                                        <td>${{ "%.2f"|format(item.total) }}</td>
+                                        <td>TK {{ "%.2f"|format(item.total) }}</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
                             </table>
                         </div>
                         <hr>
-                        <h5 class="text-end fw-bold text-success mt-3">Total: ${{ "%.2f"|format(total) }}</h5>
+                        {% if discount > 0 %}
+                        <div class="d-flex justify-content-between text-success">
+                            <h6>Discount:</h6>
+                            <h6>-TK {{ "%.2f"|format(discount) }}</h6>
+                        </div>
+                        {% endif %}
+                        <h5 class="text-end fw-bold text-success mt-3">Total: TK {{ "%.2f"|format(total) }}</h5>
                     </div>
                 </div>
             </div>

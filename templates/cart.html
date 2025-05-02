@@ -21,14 +21,14 @@
             {% for item in cart.values() %}
             <tr>
                 <td>{{ item['name'] }}</td>
-                <td>${{ "%.2f"|format(item['price']) }}</td>
+                <td>TK {{ "%.2f"|format(item['price']) }}</td>
                 <td>
                     <form action="{{ url_for('update_cart') }}" method="POST">
                         <input type="number" name="quantity_{{ item['id'] }}" value="{{ item['quantity'] }}" min="1" class="form-control w-50 d-inline">
                         <button type="submit" class="btn btn-primary btn-sm ms-2">Update</button>
                     </form>
                 </td>
-                <td>${{ "%.2f"|format(item['price'] * item['quantity']) }}</td>
+                <td>TK {{ "%.2f"|format(item['price'] * item['quantity']) }}</td>
                 <td>
                     <a href="{{ url_for('remove_from_cart', product_id=item['id']) }}" class="btn btn-danger btn-sm">
                         Remove
@@ -40,11 +40,71 @@
     </table>
 </div>
 
-<div class="d-flex justify-content-between mt-4">
-    <h4>Total: ${{ "%.2f"|format(total) }}</h4>
-    <a href="{{ url_for('checkout') }}" class="btn btn-success">Proceed to Checkout</a>
+<!-- Coupon Form -->
+<div class="mt-4">
+    <form method="POST" action="{{ url_for('apply_coupon') }}">
+        <div class="input-group mb-3">
+            <input type="text" class="form-control" name="coupon_code" placeholder="Enter coupon code">
+            <button class="btn btn-primary" type="submit">Apply Coupon</button>
+        </div>
+    </form>
+
+    {% if coupon %}
+    <div class="alert alert-success d-flex justify-content-between align-items-center" role="alert">
+        <div>
+            Coupon <strong>{{ coupon.code }}</strong> applied!
+            {% if coupon.is_percentage %}
+                {{ coupon.discount_amount }}% discount (TK {{ "%.2f"|format(discount) }})
+            {% else %}
+                TK {{ "%.2f"|format(discount) }} discount
+            {% endif %}
+        </div>
+        <form method="POST" action="{{ url_for('remove_coupon') }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger">Remove Coupon</button>
+        </form>
+    </div>
+    {% endif %}
 </div>
+
+<!-- Total Price Calculation -->
+<div class="card mt-4 mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between">
+            <h5>Subtotal:</h5>
+            <h5>TK {{ "%.2f"|format(subtotal) }}</h5>
+        </div>
+
+        {% if discount > 0 %}
+        <div class="d-flex justify-content-between text-success">
+            <h5>Discount:</h5>
+            <h5>-TK {{ "%.2f"|format(discount) }}</h5>
+        </div>
+        <hr>
+        {% endif %}
+
+        <div class="d-flex justify-content-between fw-bold">
+            <h4>Total:</h4>
+            <h4>TK {{ "%.2f"|format(total) }}</h4>
+        </div>
+
+        <div class="d-grid gap-2 mt-3">
+            <a href="{{ url_for('checkout') }}" class="btn btn-success btn-lg">Proceed to Checkout</a>
+        </div>
+    </div>
+</div>
+
 {% else %}
 <p>Your cart is empty.</p>
 {% endif %}
 {% endblock %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+

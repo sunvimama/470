@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block title %}Update Order Status{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <h2 class="mb-4">Update Order Status - {{ order.order_number }}</h2>
+    <form method="POST">
+        <div class="mb-3">
+            <label for="status" class="form-label">Order Status</label>
+            <select class="form-select" id="status" name="status" required>
+                {% for s in ['Pending', 'Shipped', 'Delivered', 'Cancelled'] %}
+                    <option value="{{ s }}" {% if order.status == s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-success">Update</button>
+        <a href="{{ url_for('admin_orders') }}" class="btn btn-secondary ms-2">Back</a>
+    </form>
+</div>
+{% endblock %}

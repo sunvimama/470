@@ -16,7 +16,7 @@
 
                 <div class="card-body d-flex flex-column">
                     <h5 class="card-title">{{ product.name }}</h5>
-                    <p class="text-success fw-semibold">${{ "%.2f"|format(product.price) }}</p>
+                    <p class="text-success fw-semibold">TK {{ "%.2f"|format(product.price) }}</p>
                     <p class="card-text small text-muted">
                         {{ product.description[:90] }}{% if product.description|length > 90 %}...{% endif %}
                     </p>

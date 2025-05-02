@@ -1,9 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for, flash,jsonify,session
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, UserMixin, current_user
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 from functools import wraps
+import random
+import string
+import stripe
 
 load_dotenv()
 
@@ -54,14 +57,39 @@ class Order(db.Model):
     __tablename__ = 'orders'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
-    quantity = db.Column(db.Integer, nullable=False)
+    order_number = db.Column(db.String(20), unique=True)
     status = db.Column(db.String(50), nullable=False, default='Processing')
     order_date = db.Column(db.DateTime, default=db.func.now())
     delivery_date = db.Column(db.DateTime, nullable=True)
+    total_price = db.Column(db.Float, nullable=False)
+    address = db.Column(db.String(200), nullable=False)
+    payment_method = db.Column(db.String(50), nullable=False)
+    coupon_code = db.Column(db.String(50), nullable=True)
+    discount_amount = db.Column(db.Float, nullable=True)
 
     user = db.relationship('User', backref='orders')
+    items = db.relationship('OrderItem', backref='order', cascade='all, delete-orphan')
+
+class OrderItem(db.Model):
+    __tablename__ = 'order_items'
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    product_name = db.Column(db.String(100), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    price = db.Column(db.Float, nullable=False)
+
     product = db.relationship('Product')
+
+class Coupon(db.Model):
+    __tablename__ = 'coupon'
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(50), unique=True, nullable=False)
+    discount_amount = db.Column(db.Float, nullable=False)
+    is_percentage = db.Column(db.Boolean, default=False)
+    valid_from = db.Column(db.DateTime, nullable=True)
+    valid_to = db.Column(db.DateTime, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
 class Wishlist(db.Model):
     __tablename__ = 'wishlist'
     id = db.Column(db.Integer, primary_key=True)
@@ -94,7 +122,8 @@ def home():
 
 @app.route('/product-display')
 def product_display():
-    return render_template('product_display.html')
+    products = Product.query.all()
+    return render_template('product_display.html', products=products)
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -145,6 +174,37 @@ def contact():
 @login_required
 def profile():
     return render_template('profile.html')
+@app.route('/order/<int:order_id>')
+@login_required
+def view_order(order_id):
+    # If admin, allow viewing any order
+    if current_user.is_admin:
+        order = Order.query.filter_by(id=order_id).first_or_404()
+    else:
+        # Regular users can only view their own orders
+        order = Order.query.filter_by(id=order_id, user_id=current_user.id).first_or_404()
+
+    # Get order items
+    order_items = OrderItem.query.filter_by(order_id=order.id).all()
+
+    return render_template('order_details.html', order=order, order_items=order_items)
+
+@app.route('/admin/update_order_status/<int:order_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def update_order_status(order_id):
+    order = Order.query.get_or_404(order_id)
+
+    if request.method == 'POST':
+        new_status = request.form.get('status')
+        if new_status:
+            order.status = new_status
+            db.session.commit()
+            flash(f"Order status updated to {new_status}.", "success")
+            return redirect(url_for('admin_orders'))
+
+    return render_template('admin/update_order_status.html', order=order)
+
 
 # ------------------ Admin Dashboard & Product Management ------------------
 
@@ -225,12 +285,12 @@ def delete_product(product_id):
 def admin_orders():
     orders = Order.query.order_by(Order.order_date.desc()).all()
 
-    total_sales = db.session.query(db.func.sum(Product.price * Order.quantity)).join(Product, Order.product_id == Product.id).scalar() or 0
+    total_sales = db.session.query(db.func.sum(Order.total_price)).scalar() or 0
     total_orders = len(orders)
     completed_orders = Order.query.filter_by(status='Delivered').count()
     pending_orders = Order.query.filter(Order.status != 'Delivered').count()
 
-    return render_template('admin/orders.html', orders=orders, total_sales=total_sales, total_orders=total_orders,
+    return render_template('admin/admin_orders.html', orders=orders, total_sales=total_sales, total_orders=total_orders,
                            completed_orders=completed_orders, pending_orders=pending_orders)
 
 # ------------------ Review ------------------
@@ -263,7 +323,6 @@ def search_products():
     brand = request.args.get('brand')
     min_price = request.args.get('min_price', type=float)
     max_price = request.args.get('max_price', type=float)
-    min_rating = request.args.get('min_rating', type=int)
     availability = request.args.get('availability')
 
     products = Product.query
@@ -337,6 +396,181 @@ def wishlist():
 def shop():
     products = Product.query.all()
     return render_template('product_display.html', products=products)
+# ------------------ Checkout ------------------
+
+@app.route('/checkout', methods=['GET', 'POST'])
+@login_required
+def checkout():
+    cart = session.get('cart', {})
+
+    if not cart:
+        flash("Your cart is empty.", "info")
+        return redirect(url_for('shop'))
+
+    cart_items = []
+    subtotal = 0
+    for _, item in cart.items():
+        item_total = item['price'] * item['quantity']
+        cart_items.append({
+            'id': item['id'],
+            'name': item['name'],
+            'price': item['price'],
+            'quantity': item['quantity'],
+            'total': item_total
+        })
+        subtotal += item_total
+
+    # Calculate discount if coupon is applied
+    discount = 0
+    coupon = session.get('coupon')
+    if coupon:
+        if coupon['is_percentage']:
+            discount = subtotal * (coupon['discount_amount'] / 100)
+        else:
+            discount = min(coupon['discount_amount'], subtotal)  # Don't allow negative total
+
+    total = subtotal - discount
+
+    return render_template('checkout.html', cart_items=cart_items, subtotal=subtotal, discount=discount, total=total, coupon=coupon)
+
+# ------------------ Payment Processing ------------------
+
+@app.route('/process-payment', methods=['POST'])
+@login_required
+def process_payment():
+    address = request.form.get('address')
+    payment_method = request.form.get('payment_method')
+
+    cart = session.get('cart', {})
+    subtotal = sum(item['price'] * item['quantity'] for item in cart.values())
+
+    # Calculate discount if coupon is applied
+    discount = 0
+    coupon = session.get('coupon')
+    if coupon:
+        if coupon['is_percentage']:
+            discount = subtotal * (coupon['discount_amount'] / 100)
+        else:
+            discount = min(coupon['discount_amount'], subtotal)  # Don't allow negative total
+
+    total = subtotal - discount
+
+    if not cart:
+        flash("Cart is empty.", "danger")
+        return redirect(url_for('cart'))
+
+    # Dummy order number generation (e.g., TBZ20250502XYZ)
+    order_number = 'TBZ' + ''.join(random.choices(string.digits, k=6)) + ''.join(random.choices(string.ascii_uppercase, k=3))
+
+    try:
+        if payment_method == 'credit_card':
+            # Simulated Stripe charge
+            stripe.api_key = "your_stripe_test_key"  # You should use environment variables for this
+            stripe.PaymentIntent.create(
+                amount=int(total * 100),  # convert dollars to cents
+                currency='usd',
+                payment_method_types=['card'],
+                metadata={'order_id': order_number}
+            )
+            flash("Payment successful! (Stripe simulation)", "success")
+        elif payment_method == 'paypal':
+            flash("Redirected to PayPal. (Simulated)", "info")
+        elif payment_method == 'cash_on_delivery':
+            flash("Order placed with Cash on Delivery!", "success")
+
+        # Save order_number in session
+        session['order_number'] = order_number
+
+        # Create cart items list for database
+        cart_items = []
+        for _, item in cart.items():
+            cart_items.append({
+                'id': item['id'],
+                'name': item['name'],
+                'price': item['price'],
+                'quantity': item['quantity']
+            })
+
+        # Create order in database
+        order = Order(
+            order_number=order_number,
+            user_id=current_user.id,
+            address=address,
+            payment_method=payment_method,
+            total_price=total
+        )
+
+        # Store coupon information if used
+        if coupon:
+            order.coupon_code = coupon['code']
+            order.discount_amount = discount
+
+        db.session.add(order)
+        db.session.flush()  # Get order.id before adding items
+
+        for item in cart_items:
+            order_item = OrderItem(
+                order_id=order.id,
+                product_id=item['id'],
+                product_name=item['name'],
+                quantity=item['quantity'],
+                price=item['price']
+            )
+            db.session.add(order_item)
+
+        db.session.commit()
+
+        # Clear cart and coupon
+        session['cart'] = {}
+        if 'coupon' in session:
+            session.pop('coupon')
+
+        return redirect(url_for('order_confirmation'))
+
+    except stripe.error.StripeError as e:
+        flash(f"Payment failed: {e.user_message}", "danger")
+        return redirect(url_for('checkout'))
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error processing order: {str(e)}", "danger")
+        return redirect(url_for('checkout'))
+
+##APPLY COUPON
+@app.route('/apply_coupon', methods=['POST'])
+@login_required
+def apply_coupon():
+    coupon_code = request.form.get('coupon_code')
+    if not coupon_code:
+        flash("Please enter a coupon code.", 'warning')
+        return redirect(url_for('cart'))
+
+    # Find the coupon in the database
+    coupon = Coupon.query.filter_by(code=coupon_code, is_active=True).first()
+
+    if not coupon:
+        flash("Invalid coupon code.", 'danger')
+        return redirect(url_for('cart'))
+
+    # Store the coupon in the session
+    session['coupon'] = {
+        'code': coupon.code,
+        'discount_amount': coupon.discount_amount,
+        'is_percentage': coupon.is_percentage
+    }
+
+    # Calculate the discount amount for display
+    cart = session.get('cart', {})
+    total = sum(item['price'] * item['quantity'] for item in cart.values())
+
+    if coupon.is_percentage:
+        discount = total * (coupon.discount_amount / 100)
+        flash(f"Coupon applied! {coupon.discount_amount}% discount (TK {discount:.2f})", 'success')
+    else:
+        discount = coupon.discount_amount
+        flash(f"Coupon applied! TK {discount:.2f} discount", 'success')
+
+    return redirect(url_for('cart'))
+
 
 # ------------------ App Init ------------------
 @app.route('/add_to_cart/<int:product_id>', methods=['POST'])
@@ -361,8 +595,20 @@ def add_to_cart(product_id):
 @login_required
 def cart():
     cart = session.get('cart', {})
-    total = sum(item['price'] * item['quantity'] for item in cart.values())
-    return render_template('cart.html', cart=cart, total=total)
+    subtotal = sum(item['price'] * item['quantity'] for item in cart.values())
+
+    # Calculate discount if coupon is applied
+    discount = 0
+    coupon = session.get('coupon')
+    if coupon:
+        if coupon['is_percentage']:
+            discount = subtotal * (coupon['discount_amount'] / 100)
+        else:
+            discount = min(coupon['discount_amount'], subtotal)  # Don't allow negative total
+
+    total = subtotal - discount
+
+    return render_template('cart.html', cart=cart, subtotal=subtotal, discount=discount, total=total, coupon=coupon)
 
 @app.route('/update_cart', methods=['POST'])
 @login_required
@@ -386,36 +632,23 @@ def remove_from_cart(product_id):
     session['cart'] = cart
     flash("Item removed from cart.", "warning")
     return redirect(url_for('cart'))
-@app.route('/checkout', methods=['GET', 'POST'])
+
+@app.route('/remove_coupon', methods=['POST'])
 @login_required
-def checkout():
-    cart = session.get('cart', {})
-    print("Cart from session:", session.get('cart'))
+def remove_coupon():
+    if 'coupon' in session:
+        session.pop('coupon')
+        flash("Coupon removed.", "info")
+    return redirect(url_for('cart'))
 
-    if not cart:
-        flash("Your cart is empty.", "info")
-        return redirect(url_for('shop'))
 
-    cart_items = []
-    total = 0
-    for item_id, item in cart.items():
-        item_total = item['price'] * item['quantity']
-        cart_items.append({
-            'id': item['id'],
-            'name': item['name'],
-            'price': item['price'],
-            'quantity': item['quantity'],
-            'total': item_total
-        })
-        total += item_total
+@app.route('/order_confirmation')
+@login_required
+def order_confirmation():
+    order_number = session.pop('order_number', None)
+    return render_template('order_confirmation.html', order_number=order_number)
 
-    if request.method == 'POST':
-        # Simulate order processing (You can extend this with actual order creation in the database)
-        flash("Order placed successfully!", "success")
-        session.pop('cart', None)  # Clear the cart
-        return redirect(url_for('order_history'))
 
-    return render_template('checkout.html', cart_items=cart_items, total=total)
 
 if __name__ == "__main__":
     with app.app_context():

@@ -34,6 +34,18 @@
                 </form>
 
                 <ul class="navbar-nav">
+                    <!-- Home -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('home') }}">
+                            <i class="fas fa-home me-1"></i> Home
+                        </a>
+                    </li>
+                    <!-- Shop -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('shop') }}">
+                            <i class="fas fa-shopping-bag me-1"></i> Shop
+                        </a>
+                    </li>
                     <!-- Wishlist -->
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('wishlist') }}">

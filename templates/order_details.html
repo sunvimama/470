@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}Order Details - TechBazar{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-primary text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h3 class="mb-0">Order #{{ order.order_number }}</h3>
+                <span class="badge bg-light text-dark">{{ order.status }}</span>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <h5 class="text-muted">Order Information</h5>
+                    <p><strong>Date:</strong> {{ order.order_date.strftime('%Y-%m-%d %H:%M') if order.order_date else 'N/A' }}</p>
+                    <p><strong>Payment Method:</strong> {{ order.payment_method }}</p>
+                    <p><strong>Shipping Address:</strong> {{ order.address }}</p>
+                    {% if order.coupon_code %}
+                    <p><strong>Coupon Applied:</strong> {{ order.coupon_code }}</p>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <h5 class="text-muted">Price Summary</h5>
+                    {% set subtotal = 0 %}
+                    {% for item in order_items %}
+                        {% set subtotal = subtotal + (item.price * item.quantity) %}
+                    {% endfor %}
+                    <p><strong>Subtotal:</strong> TK {{ "%.2f"|format(subtotal) }}</p>
+                    {% if order.discount_amount %}
+                    <p><strong>Discount:</strong> -TK {{ "%.2f"|format(order.discount_amount) }}</p>
+                    {% endif %}
+                    <p class="fw-bold"><strong>Total:</strong> TK {{ "%.2f"|format(order.total_price) }}</p>
+                </div>
+            </div>
+
+            <h5 class="text-muted mb-3">Order Items</h5>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Product</th>
+                            <th>Price</th>
+                            <th>Quantity</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in order_items %}
+                        <tr>
+                            <td>{{ item.product_name }}</td>
+                            <td>TK {{ "%.2f"|format(item.price) }}</td>
+                            <td>{{ item.quantity }}</td>
+                            <td>TK {{ "%.2f"|format(item.price * item.quantity) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between">
+        <a href="{{ url_for('order_history') }}" class="btn btn-outline-primary">
+            <i class="fas fa-arrow-left me-2"></i> Back to Orders
+        </a>
+        {% if order.status == 'Processing' %}
+        <a href="#" class="btn btn-danger">Cancel Order</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
