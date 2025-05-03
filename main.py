@@ -118,6 +118,28 @@ class EmiPlan(db.Model):
     user = db.relationship('User', backref='emi_plans')
     order = db.relationship('Order', backref='emi_plans')
 
+class Notification(db.Model):
+    __tablename__ = 'notifications'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    message = db.Column(db.String(255), nullable=False)
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    notification_type = db.Column(db.String(50))  # 'wishlist', 'restock', 'order', 'emi', etc.
+    related_id = db.Column(db.Integer)  # ID of related product/order/etc.
+
+    user = db.relationship('User', backref='notifications')
+
+class UserProductView(db.Model):
+    __tablename__ = 'user_product_views'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    view_count = db.Column(db.Integer, default=1)
+    last_viewed = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref='viewed_products')
+    product = db.relationship('Product')
 
 # ------------------ Auth & Admin Utils ------------------
 
@@ -133,7 +155,34 @@ def admin_required(f):
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
+# Notification Utilities
+def create_notification(user_id, message, notification_type, related_id=None):
+    """Create a new notification for a user"""
+    notification = Notification(
+        user_id=user_id,
+        message=message,
+        notification_type=notification_type,
+        related_id=related_id
+    )
+    db.session.add(notification)
+    db.session.commit()
+    return notification
 
+def get_unread_notifications_count(user_id):
+    """Get count of unread notifications for a user"""
+    return Notification.query.filter_by(user_id=user_id, is_read=False).count()
+
+def get_user_notifications(user_id, limit=5):
+    """Get recent notifications for a user"""
+    return Notification.query.filter_by(user_id=user_id).order_by(Notification.created_at.desc()).limit(limit).all()
+
+def mark_notifications_as_read(user_id, notification_ids=None):
+    """Mark notifications as read (specific or all)"""
+    query = Notification.query.filter_by(user_id=user_id, is_read=False)
+    if notification_ids:
+        query = query.filter(Notification.id.in_(notification_ids))
+    query.update({'is_read': True})
+    db.session.commit()
 # ------------------ Routes ------------------
 
 @app.route('/')
@@ -249,6 +298,7 @@ def admin_products():
 def add_product():
     if request.method == 'POST':
         try:
+            # Create the new product
             product = Product(
                 name=request.form['name'],
                 description=request.form['description'],
@@ -258,12 +308,24 @@ def add_product():
             )
             db.session.add(product)
             db.session.commit()
-            flash('Product added successfully!', 'success')
+
+            # Notify all users about the new product
+            users = User.query.all()
+            for user in users:
+                create_notification(
+                    user_id=user.id,
+                    message=f"New product added: {product.name}",
+                    notification_type='new_product',
+                    related_id=product.id
+                )
+            
+            flash('Product added successfully and notifications sent!', 'success')
             return redirect(url_for('admin_products'))
         except Exception as e:
             db.session.rollback()
             flash(f'Error adding product: {str(e)}', 'danger')
     return render_template('admin/add_product.html')
+
 
 @app.route('/admin/products/edit/<int:product_id>', methods=['GET', 'POST'])
 @login_required
@@ -272,11 +334,27 @@ def edit_product(product_id):
     product = Product.query.get_or_404(product_id)
     if request.method == 'POST':
         try:
+            old_stock = product.stock
+            new_stock = int(request.form['stock'])
+            
             product.name = request.form['name']
             product.description = request.form['description']
             product.price = float(request.form['price'])
-            product.stock = int(request.form['stock'])
+            product.stock = new_stock
             product.image_url = request.form['image_url']
+            
+            # Check if product was restocked
+            if old_stock == 0 and new_stock > 0:
+                # Find all users who have this in their wishlist
+                wishlist_users = Wishlist.query.filter_by(product_id=product.id).all()
+                for item in wishlist_users:
+                    create_notification(
+                        user_id=item.user_id,
+                        message=f"{product.name} is back in stock!",
+                        notification_type='restock',
+                        related_id=product.id
+                    )
+            
             db.session.commit()
             flash('Product updated successfully!', 'success')
             return redirect(url_for('admin_products'))
@@ -384,10 +462,20 @@ def inject_products():
 @app.route('/wishlist/add/<int:product_id>', methods=['POST'])
 @login_required
 def add_to_wishlist(product_id):
+    product = Product.query.get_or_404(product_id)
     existing_item = Wishlist.query.filter_by(user_id=current_user.id, product_id=product_id).first()
     if not existing_item:
         new_item = Wishlist(user_id=current_user.id, product_id=product_id)
         db.session.add(new_item)
+        
+        # Create notification
+        create_notification(
+            user_id=current_user.id,
+            message=f"You added {product.name} to your wishlist",
+            notification_type='wishlist',
+            related_id=product.id
+        )
+        
         db.session.commit()
         flash('Added to wishlist!', 'success')
     else:
@@ -507,16 +595,9 @@ def process_payment():
     order_number = 'TBZ' + ''.join(random.choices(string.digits, k=6)) + ''.join(random.choices(string.ascii_uppercase, k=3))
 
     try:
+        # Simulate payment method actions (skip Stripe)
         if payment_method == 'credit_card':
-            # Simulated Stripe charge
-            stripe.api_key = "your_stripe_test_key"  # You should use environment variables for this
-            stripe.PaymentIntent.create(
-                amount=int(total * 100),  # convert dollars to cents
-                currency='usd',
-                payment_method_types=['card'],
-                metadata={'order_id': order_number}
-            )
-            flash("Payment successful! (Stripe simulation)", "success")
+            flash("Credit Card selected. (No payment processing)", "info")
         elif payment_method == 'paypal':
             flash("Redirected to PayPal. (Simulated)", "info")
         elif payment_method == 'cash_on_delivery':
@@ -553,6 +634,14 @@ def process_payment():
         db.session.flush()  # Get order.id before adding items
 
         for item in cart_items:
+            # 🔽 STOCK DEDUCTION LOGIC
+            product = Product.query.get(item['id'])
+            if not product or product.stock < item['quantity']:
+                flash(f"Insufficient stock for {item['name']}", "danger")
+                db.session.rollback()
+                return redirect(url_for('cart'))
+            product.stock -= item['quantity']  # Deduct stock
+
             order_item = OrderItem(
                 order_id=order.id,
                 product_id=item['id'],
@@ -571,13 +660,11 @@ def process_payment():
 
         return redirect(url_for('order_confirmation'))
 
-    except stripe.error.StripeError as e:
-        flash(f"Payment failed: {e.user_message}", "danger")
-        return redirect(url_for('checkout'))
     except Exception as e:
         db.session.rollback()
         flash(f"Error processing order: {str(e)}", "danger")
         return redirect(url_for('checkout'))
+
 
 ##APPLY COUPON
 @app.route('/apply_coupon', methods=['POST'])
@@ -774,6 +861,50 @@ def analytics_dashboard():
                            total_orders=total_orders,
                            product_performance=product_performance)
 
+# Notification Routes
+@app.route('/notifications')
+@login_required
+def notifications():
+    user_notifications = Notification.query.filter_by(user_id=current_user.id)\
+        .order_by(Notification.created_at.desc()).all()
+    return render_template('notifications.html', notifications=user_notifications)
+
+@app.route('/notifications/mark_as_read/<int:notification_id>')
+@login_required
+def mark_notification_as_read(notification_id):
+    notification = Notification.query.filter_by(id=notification_id, user_id=current_user.id).first_or_404()
+    notification.is_read = True
+    db.session.commit()
+    return render_template('notifications.html', notifications=get_user_notifications(current_user.id))
+
+@app.route('/notifications/mark_all_as_read', methods=['POST'])
+@login_required
+def mark_all_notifications_as_read():
+    Notification.query.filter_by(user_id=current_user.id, is_read=False).update({'is_read': True})
+    db.session.commit()
+    return render_template('notifications.html', notifications=get_user_notifications(current_user.id))
+
+@app.route('/notifications/count')
+@login_required
+def notification_count():
+    count = get_unread_notifications_count(current_user.id)
+    return jsonify({'count': count})
+
+@app.context_processor
+def inject_notifications():
+    if current_user.is_authenticated:
+        return {
+            'unread_notifications_count': get_unread_notifications_count(current_user.id),
+            'recent_notifications': get_user_notifications(current_user.id, 3)
+        }
+    return {}
+
+
+@app.template_filter('datetime')
+def format_datetime(value, format="%Y-%m-%d %H:%M"):
+    if isinstance(value, datetime):
+        return value.strftime(format)
+    return value
 
 if __name__ == "__main__":
     with app.app_context():

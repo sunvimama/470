@@ -60,6 +60,16 @@
                         </a>
                     </li>
 
+                    <!-- Notifications -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('notifications') }}">
+                            <i class="fas fa-bell me-1"></i> Notifications
+                            {% if unread_notifications_count > 0 %}
+                                <span class="badge bg-danger ms-2">{{ unread_notifications_count }}</span>
+                            {% endif %}
+                        </a>
+                    </li>
+
                     <!-- Review Modal Trigger -->
                     <li class="nav-item">
                         <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#reviewModal">

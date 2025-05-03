@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Your Notifications</h2>
+    
+    {% if notifications %}
+    <div class="list-group mt-3">
+        {% for note in notifications %}
+        <div class="list-group-item {% if not note.is_read %}bg-light{% endif %}">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>{{ note.message }}</strong>
+                    {% if not note.is_read %}
+                    <span class="badge bg-warning text-dark ms-2">Unread</span>
+                    {% else %}
+                    <span class="badge bg-secondary ms-2">Read</span>
+                    {% endif %}
+                </div>
+                <small class="text-muted">{{ note.created_at|datetime('%b %d, %Y %I:%M %p') }}</small>
+            </div>
+            {% if not note.is_read %}
+            <div class="mt-2">
+                <a href="{{ url_for('mark_notification_as_read', notification_id=note.id) }}" 
+                   class="btn btn-sm btn-outline-success">Mark as Read</a>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info mt-3">You have no notifications yet.</div>
+    {% endif %}
+</div>
+{% endblock %}
