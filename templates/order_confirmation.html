@@ -19,6 +19,13 @@
                     <div class="alert alert-info">
                         <strong>Order Number:</strong> {{ order_number }}
                     </div>
+                    {% if emi_duration %}
+                    <div class="alert alert-info">
+                        <strong>EMI Details:</strong>
+                        <p>You have chosen the <strong>{{ emi_duration }}-month EMI plan</strong>.</p>
+                        <p><strong>Monthly EMI Amount:</strong> TK {{ "%.2f"|format(emi_amount) }}</p>
+                    </div>
+                    {% endif %}
                     <p>A confirmation email has been sent with your order details.</p>
                     <hr class="my-4">
                     <div class="d-grid gap-2 col-md-6 mx-auto">

@@ -4,6 +4,8 @@ from flask_login import LoginManager, login_user, login_required, logout_user, U
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 from functools import wraps
+from datetime import datetime
+
 import random
 import string
 import stripe
@@ -98,6 +100,24 @@ class Wishlist(db.Model):
 
     user = db.relationship('User', backref='wishlist_items')
     product = db.relationship('Product')
+
+class EmiPlan(db.Model):
+    __tablename__ = 'emi_plans'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    order_id = db.Column(db.Integer, db.ForeignKey('orders.id'))
+    total_amount = db.Column(db.Numeric(10, 2), nullable=False)
+    emi_duration = db.Column(db.Integer, nullable=False)
+    emi_amount = db.Column(db.Numeric(10, 2), nullable=False)
+    payment_method = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(50), default='pending')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship('User', backref='emi_plans')
+    order = db.relationship('Order', backref='emi_plans')
+
 
 # ------------------ Auth & Admin Utils ------------------
 
@@ -431,7 +451,31 @@ def checkout():
 
     total = subtotal - discount
 
-    return render_template('checkout.html', cart_items=cart_items, subtotal=subtotal, discount=discount, total=total, coupon=coupon)
+    # Handle EMI (Installment) payment
+    emi_duration = None
+    payment_method = request.form.get('payment_method')
+    if payment_method == 'emi' and total > 10000:
+        emi_duration = int(request.form.get('emi_duration', 3))  # Default to 3 months if not selected
+        emi_amount = total / emi_duration  # EMI calculation
+
+        # Save EMI details to database
+        # Assuming you have an `emi_plans` table for storing this data
+        # You may need to modify this based on your actual database setup
+        # For now, I am showing just an example logic here
+        new_emi_plan = EMIPlan(
+            user_id=current_user.id,
+            order_id=None,  # This will be set after order is placed
+            total_amount=total,
+            emi_duration=emi_duration,
+            emi_amount=emi_amount,
+            payment_method=payment_method,
+            status='pending'
+        )
+        db.session.add(new_emi_plan)
+        db.session.commit()
+
+    return render_template('checkout.html', cart_items=cart_items, subtotal=subtotal, discount=discount, total=total, coupon=coupon, emi_duration=emi_duration)
+
 
 # ------------------ Payment Processing ------------------
 
@@ -646,7 +690,16 @@ def remove_coupon():
 @login_required
 def order_confirmation():
     order_number = session.pop('order_number', None)
-    return render_template('order_confirmation.html', order_number=order_number)
+    
+    # Fetch EMI details from the session if available
+    emi_duration = session.get('emi_duration', None)
+    emi_amount = session.get('emi_amount', None)
+
+    return render_template('order_confirmation.html', 
+        order_number=order_number,
+        emi_duration=emi_duration,
+        emi_amount=emi_amount)
+
 
 @app.route('/return_request/<int:order_id>', methods=['GET', 'POST'])
 @login_required

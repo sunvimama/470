@@ -26,9 +26,24 @@
                                 <option value="credit_card">Credit Card</option>
                                 <option value="paypal">PayPal</option>
                                 <option value="cash_on_delivery">Cash on Delivery</option>
+                                {% if total > 10000 %}
+                                    <option value="emi">EMI (Installment Payment)</option>
+                                {% endif %}
                             </select>
                             <label for="payment_method">Payment Method</label>
                         </div>
+
+                        <!-- EMI Duration Selection -->
+                        {% if total > 10000 %}
+                        <div class="form-floating mb-4" id="emi_duration_section" style="display: none;">
+                            <select class="form-select" id="emi_duration" name="emi_duration" aria-label="EMI Duration">
+                                <option value="3">3 Months</option>
+                                <option value="6">6 Months</option>
+                                <option value="12">12 Months</option>
+                            </select>
+                            <label for="emi_duration">Select EMI Duration</label>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -148,4 +163,19 @@
         color: #6c757d;
     }
 </style>
+
+<script>
+    document.getElementById('payment_method').addEventListener('change', function() {
+        var paymentMethod = this.value;
+        var emiDurationSection = document.getElementById('emi_duration_section');
+        
+        // Show or hide the EMI duration section based on payment method
+        if (paymentMethod === 'emi') {
+            emiDurationSection.style.display = 'block';
+        } else {
+            emiDurationSection.style.display = 'none';
+        }
+    });
+</script>
+
 {% endblock %}
