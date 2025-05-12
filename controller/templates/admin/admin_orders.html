@@ -66,7 +66,7 @@
                 <td>{{ order.order_date.strftime('%Y-%m-%d') if order.order_date else 'N/A' }}</td>
                 <td>
                     <a href="{{ url_for('view_order', order_id=order.id) }}" class="btn btn-sm btn-info">View</a>
-                    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-sm btn-primary">Update</a>
+                    <a href="{{ url_for('update_order_status', order_id=order.id) }}" class="btn btn-sm btn-primary">Update</a>
                 </td>
             </tr>
             {% endfor %}

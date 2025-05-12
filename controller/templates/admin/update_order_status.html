@@ -5,7 +5,8 @@
 {% block content %}
 <div class="container py-5">
     <h2 class="mb-4">Update Order Status - {{ order.order_number }}</h2>
-    <form method="POST">
+    <form method="POST" action="{{ url_for('update_order_status', order_id=order.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
         <div class="mb-3">
             <label for="status" class="form-label">Order Status</label>
             <select class="form-select" id="status" name="status" required>

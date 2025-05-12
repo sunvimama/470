@@ -157,13 +157,22 @@ def view_order(order_id):
 @admin_required
 def update_order_status(order_id):
     order = Order.query.get_or_404(order_id)
+    print(f"DEBUG: Accessing update_order_status for order_id={order_id}, current status={order.status}")
 
     if request.method == 'POST':
         new_status = request.form.get('status')
+        print(f"DEBUG: POST request received with new_status={new_status}")
         if new_status:
+            old_status = order.status
             order.status = new_status
-            db.session.commit()
-            flash(f"Order status updated to {new_status}.", "success")
+            try:
+                db.session.commit()
+                print(f"DEBUG: Order status updated from {old_status} to {new_status}")
+                flash(f"Order status updated to {new_status}.", "success")
+            except Exception as e:
+                db.session.rollback()
+                print(f"DEBUG: Error updating order status: {str(e)}")
+                flash(f"Error updating order status: {str(e)}", "danger")
             return redirect(url_for('admin_orders'))
 
     return render_template('admin/update_order_status.html', order=order)
@@ -212,7 +221,7 @@ def add_product():
                     notification_type='new_product',
                     related_id=product.id
                 )
-            
+
             flash('Product added successfully and notifications sent!', 'success')
             return redirect(url_for('admin_products'))
         except Exception as e:
@@ -230,13 +239,13 @@ def edit_product(product_id):
         try:
             old_stock = product.stock
             new_stock = int(request.form['stock'])
-            
+
             product.name = request.form['name']
             product.description = request.form['description']
             product.price = float(request.form['price'])
             product.stock = new_stock
             product.image_url = request.form['image_url']
-            
+
             # Check if product was restocked
             if old_stock == 0 and new_stock > 0:
                 # Find all users who have this in their wishlist
@@ -248,7 +257,7 @@ def edit_product(product_id):
                         notification_type='restock',
                         related_id=product.id
                     )
-            
+
             db.session.commit()
             flash('Product updated successfully!', 'success')
             return redirect(url_for('admin_products'))
@@ -361,7 +370,7 @@ def add_to_wishlist(product_id):
     if not existing_item:
         new_item = Wishlist(user_id=current_user.id, product_id=product_id)
         db.session.add(new_item)
-        
+
         # Create notification
         create_notification(
             user_id=current_user.id,
@@ -369,7 +378,7 @@ def add_to_wishlist(product_id):
             notification_type='wishlist',
             related_id=product.id
         )
-        
+
         db.session.commit()
         flash('Added to wishlist!', 'success')
     else:
@@ -671,12 +680,12 @@ def remove_coupon():
 @login_required
 def order_confirmation():
     order_number = session.pop('order_number', None)
-    
+
     # Fetch EMI details from the session if available
     emi_duration = session.get('emi_duration', None)
     emi_amount = session.get('emi_amount', None)
 
-    return render_template('order_confirmation.html', 
+    return render_template('order_confirmation.html',
         order_number=order_number,
         emi_duration=emi_duration,
         emi_amount=emi_amount)
@@ -733,7 +742,7 @@ def view_returns():
     return render_template('return_request.html', returns=returns)
 @app.route('/refund-policy')
 def refund_policy():
-    return render_template('refund_policy.html') 
+    return render_template('refund_policy.html')
 
 @app.route('/admin/analytics')
 @login_required
@@ -750,7 +759,7 @@ def analytics_dashboard():
         db.func.sum(OrderItem.quantity).label('total_sold')
     ).join(OrderItem).group_by(Product.id).order_by(db.func.sum(OrderItem.quantity).desc()).limit(10).all()
 
-    return render_template("admin/analytics.html", 
+    return render_template("admin/analytics.html",
                            total_sales=total_sales,
                            total_orders=total_orders,
                            product_performance=product_performance)
