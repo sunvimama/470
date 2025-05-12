@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container">
+    <h2 class="mt-4">My Return Requests</h2>
+    
+    {% if returns %}
+        <table class="table table-bordered mt-3">
+            <thead class="table-dark">
+                <tr>
+                    <th>Order Number</th>
+                    <th>Request Date</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for return in returns %}
+                <tr>
+                    <td>{{ return.order.order_number }}</td>
+                    <td>{{ return.request_date.strftime('%Y-%m-%d') }}</td>
+                    <td>{{ return.reason }}</td>
+                    <td>
+                        <span class="badge {% if return.status == 'Approved' %}bg-success{% elif return.status == 'Rejected' %}bg-danger{% elif return.status == 'Refunded' %}bg-info{% else %}bg-warning{% endif %}">
+                            {{ return.status }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="alert alert-info mt-3">
+            You don't have any return requests yet.
+        </div>
+    {% endif %}
+    
+    <a href="{{ url_for('order_history') }}" class="btn btn-primary mt-3">Back to Orders</a>
+</div>
+{% endblock %}

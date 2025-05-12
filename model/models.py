@@ -125,3 +125,26 @@ class UserProductView(db.Model):
 
     user = db.relationship('User', backref='viewed_products')
     product = db.relationship('Product')
+
+class ReturnRequest(db.Model):
+    __tablename__ = 'return_requests'
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(50), default='Pending')
+    request_date = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref='return_requests')
+    order = db.relationship('Order', backref='return_requests')
+
+class RefundStatus(db.Model):
+    __tablename__ = 'refund_status'
+    id = db.Column(db.Integer, primary_key=True)
+    return_id = db.Column(db.Integer, db.ForeignKey('return_requests.id'), nullable=False)
+    refunded = db.Column(db.Boolean, default=False)
+    refund_date = db.Column(db.DateTime, nullable=True)
+    amount = db.Column(db.Float, nullable=False)
+
+    return_request = db.relationship('ReturnRequest', backref='refund_status')
